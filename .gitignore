@@ -1,0 +1,39 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.ipynb_checkpoints/
+.pytest_cache/
+*.joblib
+*.pkl
+
+# --- Datasets & Heavy Assets ---
+data/
+*.csv
+*.json
+*.zip
+*.parquet
+
+# --- Environment & Security ---
+.env
+.kaggle/
+kaggle.json
+.secrets
+
+# --- Editor & OS Junk ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+Session.vim
+.netrwhist
+
+# --- Tools (Colima/Docker/LSP) ---
+.lsp/
+.log
+docker-compose.override.yml
