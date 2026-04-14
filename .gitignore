@@ -22,6 +22,7 @@ data/
 .kaggle/
 kaggle.json
 .secrets
+.complete/
 
 # --- Editor & OS Junk ---
 .DS_Store
