@@ -121,7 +121,7 @@ def _(data):
 
     print(strat_train_set["social_interaction_level"].value_counts(normalize=True))
     print(data["social_interaction_level"].value_counts(normalize=True))
-    return (strat_train_set,)
+    return strat_test_set, strat_train_set
 
 
 @app.cell
@@ -302,9 +302,9 @@ def _(
 
 
 @app.cell
-def _(addiction, addiction_labels, addiction_predictions, lin_reg):
+def _(addiction, addiction_labels, lin_reg):
     addiction_predictions_lr = lin_reg.predict(addiction)
-    addiction_predictions[:5], addiction_labels.iloc[:5].values
+    addiction_predictions_lr[:5].round(), addiction_labels.iloc[:5].values
     return (addiction_predictions_lr,)
 
 
@@ -367,6 +367,18 @@ def _(
                                   scoring="neg_root_mean_squared_error", cv=10)
 
     pd.Series(random_tree_rmses).describe()
+    return (random_tree_reg,)
+
+
+@app.cell
+def _(random_tree_reg, root_mean_squared_error, strat_test_set):
+    X_test = strat_test_set.drop("addiction_level", axis=1)
+    y_test = strat_test_set["addiction_level"].copy()
+
+    final_predictions = random_tree_reg.predict(X_test)
+
+    final_rmse = root_mean_squared_error(y_test, final_predictions)
+    print(final_rmse)
     return
 
 
