@@ -78,10 +78,11 @@ def _(data):
 
 @app.cell
 def _(Path):
-    import matplotlib.pyplot as plt 
+    import matplotlib.pyplot as plt
 
     IMAGES_PATH = Path() / "images" / "social_media_impact"
     IMAGES_PATH.mkdir(parents=True, exist_ok=True)
+
 
     def save_fig(fig_id, tight_layout=True, fig_extension="png", resolution=300):
         path = IMAGES_PATH / f"{fig_id}.{fig_extension}"
@@ -117,7 +118,11 @@ def _(data):
     from sklearn.model_selection import train_test_split
 
     strat_train_set, strat_test_set = train_test_split(
-        data, test_size=0.2, stratify=data["social_interaction_level"], random_state=6112001)
+        data,
+        test_size=0.2,
+        stratify=data["social_interaction_level"],
+        random_state=6112001,
+    )
 
     print(strat_train_set["social_interaction_level"].value_counts(normalize=True))
     print(data["social_interaction_level"].value_counts(normalize=True))
@@ -128,7 +133,9 @@ def _(data):
 def _(strat_train_set):
     temp_df = strat_train_set.copy()
 
-    temp_df["interaction"] = temp_df["anxiety_level"] * temp_df["daily_social_media_hours"]
+    temp_df["interaction"] = (
+        temp_df["anxiety_level"] * temp_df["daily_social_media_hours"]
+    )
     temp_df["gap"] = temp_df["stress_level"] - temp_df["sleep_hours"]
     temp_df["success"] = temp_df["age"] * temp_df["academic_performance"]
     return (temp_df,)
@@ -180,7 +187,9 @@ def _(addiction):
     order = ["low", "medium", "high"]
     ordinal_encoder = OrdinalEncoder(categories=[order])
 
-    interaction_cat_ord = ordinal_encoder.fit_transform(addiction[["social_interaction_level"]])
+    interaction_cat_ord = ordinal_encoder.fit_transform(
+        addiction[["social_interaction_level"]]
+    )
 
     interaction_cat_ord[:20]
     return OrdinalEncoder, ordinal_encoder
@@ -237,7 +246,12 @@ def _(platform_cat_1hot):
 
 @app.cell
 def _(gender_1hot_encoder, platform_1hot_encoder):
-    gender_1hot_encoder.categories_, platform_1hot_encoder.categories_, gender_1hot_encoder.get_feature_names_out(), platform_1hot_encoder.get_feature_names_out()
+    (
+        gender_1hot_encoder.categories_,
+        platform_1hot_encoder.categories_,
+        gender_1hot_encoder.get_feature_names_out(),
+        platform_1hot_encoder.get_feature_names_out(),
+    )
     return
 
 
@@ -267,10 +281,17 @@ def _(OneHotEncoder, OrdinalEncoder, addiction, addiction_labels, np):
     num_attribs = X1_train.select_dtypes(include=[np.number]).columns.tolist()
     cat_attribs = X1_train.select_dtypes(exclude=[np.number]).columns.tolist()
 
-    preprocessing = ColumnTransformer([
-        ("ord", OrdinalEncoder(categories=[["low", "medium", "high"]]), ordinal_cols),
-        ("1hot", OneHotEncoder(handle_unknown="ignore"), onehot_cols),
-    ], remainder="passthrough")
+    preprocessing = ColumnTransformer(
+        [
+            (
+                "ord",
+                OrdinalEncoder(categories=[["low", "medium", "high"]]),
+                ordinal_cols,
+            ),
+            ("1hot", OneHotEncoder(handle_unknown="ignore"), onehot_cols),
+        ],
+        remainder="passthrough",
+    )
 
     preprocessing
     return LinearRegression, make_pipeline, preprocessing
@@ -338,8 +359,13 @@ def _(addiction, addiction_labels, root_mean_squared_error, tree_reg):
 def _(addiction, addiction_labels, tree_reg):
     from sklearn.model_selection import cross_val_score
 
-    tree_rmses = -cross_val_score(tree_reg, addiction, addiction_labels,
-                                  scoring="neg_root_mean_squared_error", cv=10)
+    tree_rmses = -cross_val_score(
+        tree_reg,
+        addiction,
+        addiction_labels,
+        scoring="neg_root_mean_squared_error",
+        cv=10,
+    )
     return cross_val_score, tree_rmses
 
 
@@ -360,11 +386,18 @@ def _(
 ):
     from sklearn.ensemble import RandomForestRegressor
 
-    random_tree_reg = make_pipeline(preprocessing, RandomForestRegressor(n_estimators=100, random_state=42))
+    random_tree_reg = make_pipeline(
+        preprocessing, RandomForestRegressor(n_estimators=100, random_state=42)
+    )
     random_tree_reg.fit(addiction, addiction_labels)
 
-    random_tree_rmses = -cross_val_score(random_tree_reg, addiction, addiction_labels,
-                                  scoring="neg_root_mean_squared_error", cv=10)
+    random_tree_rmses = -cross_val_score(
+        random_tree_reg,
+        addiction,
+        addiction_labels,
+        scoring="neg_root_mean_squared_error",
+        cv=10,
+    )
 
     pd.Series(random_tree_rmses).describe()
     return (random_tree_reg,)
