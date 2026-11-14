@@ -39,7 +39,7 @@ def _(np, positive_definite_matrix, rng):
         positive_definite_matirx = arr
 
     positive_definite_matrix
-    return n, positive_definite_matirx
+    return (n,)
 
 
 @app.cell(hide_code=True)
@@ -65,7 +65,7 @@ def _(B, np):
 
 
 @app.cell
-def _(B, np, positive_definite_matirx):
+def _(B, np):
     C = None
     try:
         C = np.linalg.cholesky(B)
@@ -73,7 +73,7 @@ def _(B, np, positive_definite_matirx):
     except np.linalg.LinAlgError:
         print("failed")
 
-    positive_definite_matirx
+    C
     return
 
 
