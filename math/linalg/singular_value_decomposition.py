@@ -4,12 +4,51 @@ __generated_with = "0.25.1"
 app = marimo.App(width="full")
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Setup — `marimo`, `numpy`
+
+    > `import marimo as mo` · `import numpy as np`
+
+    Every cell below builds on two libraries:
+
+    | import | role |
+    |---|---|
+    | `marimo as mo` | the notebook runtime. `mo.md(...)` renders narrative cells like this one; `mo.ui.table(...)` renders the interactive check table at the end. |
+    | `numpy as np` | all of the linear algebra. Every decomposition, product, and norm is plain `numpy` — no scipy, no custom solvers. |
+
+    Imported once here, then used bare as `mo.` and `np.` throughout.
+    """)
+    return
+
+
 @app.cell
 def _():
     import marimo as mo
     import numpy as np
 
     return mo, np
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `np.random.default_rng`
+
+    > `np.random.default_rng(seed=None)`
+
+    Constructs a **Generator**, numpy's modern random source and the replacement for the legacy global `np.random.seed` state machine.
+
+    | argument | meaning |
+    |---|---|
+    | `seed` | int, sequence, or `SeedSequence`. The same seed always yields the same stream — that is what makes the notebook reproducible. |
+
+    **Returns** a `Generator` exposing `.random()`, `.normal()`, `.integers()`, `.permutation()`, and friends.
+
+    **In this notebook:** `seed=42` fixes the example matrix, so every reader sees the identical `A`, the identical singular values, and identical figures.
+    """)
+    return
 
 
 @app.cell
@@ -42,11 +81,52 @@ def _(mo):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `Generator.random`
+
+    > `rng.random(size=None, dtype=np.float64)`
+
+    Draws samples from the **uniform distribution on `[0, 1)`**.
+
+    | argument | meaning |
+    |---|---|
+    | `size` | output shape — `(3, 3)` here; `None` returns a single float |
+
+    **In this notebook:** `rng.random(size=(3, 3))` gives an arbitrary, structureless matrix. That is deliberate — the SVD exists for *any* matrix, so the example is deliberately generic rather than a matrix chosen to look nice.
+    """)
+    return
+
+
 @app.cell
 def _(rng):
     A = rng.random(size=(3, 3))
     A
     return (A,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `np.linalg.svd`
+
+    > `np.linalg.svd(a, full_matrices=True, compute_uv=True, hermitian=False)`
+
+    The singular value decomposition `A = U Σ Vᵀ`.
+
+    | argument | meaning |
+    |---|---|
+    | `a` | the `(M, N)` input — any shape, any rank |
+    | `full_matrices` | `True`: `U` is `M×M`, `Vh` is `N×N`. `False`: economy shapes `M×K` and `K×N`, with `K = min(M, N)` |
+    | `compute_uv` | `False` returns only `S`, skipping the orthogonal factors |
+    | `hermitian` | `True` assumes `A = Aᴴ`, enabling a faster real-only path |
+
+    **Returns** `U, S, Vh`, with `S` in **descending** order and `A == U @ np.diag(S) @ Vh`.
+
+    **In this notebook:** `full_matrices=False` keeps the factors at their minimal shapes, so nothing is padded out with meaningless zeros.
+    """)
+    return
 
 
 @app.cell
@@ -74,6 +154,23 @@ def _(mo):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Plotting stack — `matplotlib.pyplot`, `seaborn`
+
+    > `import matplotlib.pyplot as plt` · `import seaborn as sns`
+
+    | import | role |
+    |---|---|
+    | `matplotlib.pyplot as plt` | the canvas: `subplots`, `plot`, `fill`, `annotate`, and the trailing `_fig` expression that renders a cell's output |
+    | `seaborn as sns` | the styling layer: themes, palettes, `heatmap`, `barplot`, and `despine` for quieter axes |
+
+    Split across two cells because the next one configures the theme before any figure is drawn.
+    """)
+    return
+
+
 @app.cell
 def _():
     import matplotlib.pyplot as plt
@@ -82,8 +179,29 @@ def _():
     return plt, sns
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `sns.set_theme`
+
+    > `sns.set_theme(context="notebook", style="whitegrid", palette="deep", rc=None)`
+
+    Sets seaborn's global theme in one call: matplotlib defaults, grid style, and default palette together.
+
+    | argument | meaning |
+    |---|---|
+    | `context` | element scale — `"notebook"`, `"talk"`, `"paper"`; controls font sizes and line widths |
+    | `style` | axes styling; `"whitegrid"` is a white background with a light grid |
+    | `palette` | default categorical palette, here `"deep"` |
+    | `rc` | dict of raw matplotlib rcParams merged on top — the escape hatch for per-element colors |
+
+    **In this notebook:** `rc` pins one warm off-white (`#fbfbf9`) for figure, axes, and saved-image backgrounds, plus muted slate text and grid lines. Every later plot inherits that palette, so the figures stay visually consistent without repeating style code.
+    """)
+    return
+
+
 @app.cell
-def _(plt, sns):
+def _(sns):
     sns.set_theme(
         context="notebook",
         style="whitegrid",
@@ -100,6 +218,30 @@ def _(plt, sns):
             "ytick.color": "#64748b",
         },
     )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `np.diag` and `sns.heatmap`
+
+    > `np.diag(v, k=0)` · `sns.heatmap(data, annot=False, fmt=".2g", cmap=None, center=None)`
+
+    **`np.diag`** is overloaded by input rank: given a 1-D array it *builds* a matrix with that array on the `k`-th diagonal; given a 2-D array it *extracts* one. Here `np.diag(S)` promotes the singular-value vector into the diagonal `Σ`.
+
+    **`sns.heatmap`** draws a matrix as a color-coded grid.
+
+    | argument | meaning |
+    |---|---|
+    | `annot`, `fmt` | print each value in its cell, formatted as `.2f` |
+    | `cmap` | `"rocket"` is sequential (dark = large); `"vlag"` diverges blue↔red around `center` |
+    | `center` | value pinned to the middle of a diverging map — `0.0` makes signed entries readable |
+    | `linewidths`, `linecolor` | cell borders, chosen to match the background so cells read as separate tiles |
+    | `cbar_kws` | forwarded to the colorbar (`shrink`, `pad`) |
+
+    **In this notebook:** four panels side by side, and the lesson is in the shapes — `A` is arbitrary, `U` and `Vᵀ` are orthogonal (columns are unit vectors at right angles), `Σ` is diagonal with descending non-negative entries.
+    """)
     return
 
 
@@ -144,7 +286,7 @@ def _(A, S, U, Vt, np, plt, sns):
         color="#1f2937",
     )
     _fig
-    return (S_diag,)
+    return
 
 
 @app.cell(hide_code=True)
@@ -159,6 +301,32 @@ def _(mo):
 
     The ratio $\sigma_1 / \sigma_{\min}$ is the **condition number** — a large value means the
     matrix is close to singular and inverting it will amplify noise.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `pandas.DataFrame`, `sns.barplot`, `np.linalg.cond`
+
+    > `pd.DataFrame(data)` · `sns.barplot(data, x, y, hue=None, palette=None, width=0.8)` · `np.linalg.cond(x, p=None)`
+
+    **`pd.DataFrame`** — a labeled table. The singular values, each one's share of the energy, and the running cumulative share are assembled into one frame; assignments like `_sv["energy %"] = ...` are vectorized numpy arithmetic. Seaborn then reads columns by *name*, which keeps the plotting call readable.
+
+    **`sns.barplot`** — draws one bar per category, aggregating with a mean by default.
+
+    | argument | meaning |
+    |---|---|
+    | `x`, `y` | category and value columns |
+    | `hue` | color grouping; reusing the `x` column gives each bar its own palette step |
+    | `width`, `saturation` | bar geometry and color intensity |
+    | `edgecolor`, `linewidth` | outline around each bar — drawn in the background color for visual separation |
+    | `legend=False` | suppresses the redundant hue legend |
+
+    **`np.linalg.cond`** — the 2-norm condition number `σ_max / σ_min`. It is printed in the title: a large value means the matrix is nearly singular, so a linear solve would amplify noise.
+
+    **In this notebook:** bars are magnitude, the red twin-axis line is cumulative energy, and together they make the case for truncated SVD — a couple of components already carry nearly all of the energy.
     """)
     return
 
@@ -255,6 +423,25 @@ def _(mo):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `np.array`
+
+    > `np.array(object, dtype=None, copy=True)`
+
+    Wraps a Python nested list as an `ndarray`; the nesting becomes the shape.
+
+    | argument | meaning |
+    |---|---|
+    | `object` | nested lists — `[[3, 1], [1, 3]]` becomes shape `(2, 2)` |
+    | `dtype` | element type; `float` here, so the later division and `sqrt` stay real and exact |
+
+    **In this notebook:** `A1` is symmetric and positive definite with eigenvalues `4` and `2`. Deliberately tiny — small enough to verify the hand-built SVD with mental arithmetic.
+    """)
+    return
+
+
 @app.cell
 def _(np):
     A1 = np.array([[3, 1], [1, 3]], dtype=float)
@@ -262,11 +449,45 @@ def _(np):
     return (A1,)
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `@` (matmul) and `.T`
+
+    > `A1 @ A1.T` · `a.T`
+
+    **`@`** is `np.matmul`: the true matrix product, not elementwise. Shape rule: `(m, k) @ (k, n) → (m, n)`.
+
+    **`.T`** is a transpose view — rows become columns, no copy of the data.
+
+    **In this notebook:** `B = A1 A1ᵀ` is symmetric, because transposing the product swaps the two factors, and it is positive semidefinite. Those two facts are what make step 2 of the hand recipe safe: `eigh` returns real, non-negative eigenvalues, so the square root never sees a negative number and never produces a complex vector.
+    """)
+    return
+
+
 @app.cell
 def _(A1):
     B = A1 @ A1.T
     B
     return (B,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `np.linalg.eigh` and `np.argsort`
+
+    > `np.linalg.eigh(a, UPLO="L")` · `np.argsort(a)`
+
+    **`np.linalg.eigh`** diagonalizes a **symmetric / Hermitian** matrix: `B = V Λ Vᵀ`, with guaranteed real eigenvalues and orthonormal eigenvectors. It is the correct routine for `A Aᵀ`; the general `np.linalg.eig` is slower and may return complex values even for a provably real problem.
+
+    **Returns** `(eigenvalues, eigenvectors)`, with eigenvalues **ascending** and `eigenvectors[:, i]` belonging to `eigenvalues[i]`.
+
+    **`np.argsort(a)`** returns the indices that would sort `a`, without touching `a` itself; `[::-1]` flips them to descending.
+
+    **In this notebook:** `eigh` hands back ascending order while the SVD convention is descending, so the eigenvalues *and* the matching columns of `V` are reordered with the same index array. Reordering one without the other would silently shred the eigenvector pairing.
+    """)
+    return
 
 
 @app.cell
@@ -281,11 +502,45 @@ def _(B, np):
     return V, eigenvalues
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `np.sqrt` and `np.maximum`
+
+    > `np.sqrt(x)` · `np.maximum(x1, x2)`
+
+    **`np.sqrt`** is elementwise and returns `nan` for negative input. **`np.maximum`** takes the elementwise larger of two operands — the clip used here.
+
+    **Why both:** the eigenvalues of `A Aᵀ` are non-negative in exact arithmetic, but floating-point round-off can hand back a tiny `-2e-16`. `np.maximum(eigenvalues, 0)` clamps that to zero before the square root, turning a `nan` outbreak into an honest `0.0`.
+
+    **In this notebook:** `σᵢ = √λᵢ` — the stretch factors. For this symmetric example they come out as exactly `4.0` and `2.0`, matching `np.linalg.svd(A1)`.
+    """)
+    return
+
+
 @app.cell
 def _(eigenvalues, np):
     Sv = np.sqrt(np.maximum(eigenvalues, 0))
     Sv
     return (Sv,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Broadcasting and `np.newaxis`
+
+    > `(A1 @ V) / Sv[np.newaxis, :]`
+
+    **`np.newaxis`** inserts a length-1 axis, turning the `(2,)` vector `Sv` into a `(1, 2)` row. Broadcasting then stretches that row across both rows of the product: `(2, 2) / (1, 2)` divides column `j` by `Sv[j]`.
+
+    That is exactly `uᵢ = A vᵢ / σᵢ` for every column at once, no Python loop.
+
+    **Watch out:** without `[np.newaxis, :]` numpy aligns the vector with the *rows* instead and produces a silently wrong result — the classic broadcasting bug in linear algebra code.
+
+    **In this notebook:** this one line recovers the left singular vectors from `A1 V = U Σ`.
+    """)
+    return
 
 
 @app.cell
@@ -315,7 +570,28 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `Line2D`, `Patch`, and `Axes.annotate`
+
+    > `from matplotlib.lines import Line2D` · `from matplotlib.patches import Patch` · `ax.annotate("\", xy=head, xytext=tail, arrowprops=...)`
+
+    Three drawing primitives, all fed plain numpy arrays:
+
+    | primitive | use here |
+    |---|---|
+    | `Line2D` | a *detached* line object, created empty with `Line2D([], [])` — never drawn, it exists only to hand the legend a handle with the right color and dash style |
+    | `Patch` | a filled polygon carrier; `Patch(facecolor=...)` builds legend swatches for the shaded unit square and its image |
+    | `ax.annotate` + `arrowprops` | draws the vectors: empty text, `xy` is the arrow head, `xytext` the tail |
+    | `ax.fill`, `ax.plot` | the ellipse, the grid, and the transformed square |
+
+    **In this notebook:** `arrow` and `dashed` are shared dicts so every arrow and dotted line is styled identically. `circle @ A1.T` pushes all 400 points of the unit circle through the map as a single `(400, 2)` array — one matmul, no loop over angles.
+    """)
+    return
+
+
+@app.cell(expand_output=True)
 def _(A1, Sv, U1, V, np, plt, sns):
     from matplotlib.lines import Line2D
     from matplotlib.patches import Patch
@@ -485,6 +761,31 @@ def _(mo):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Reassembly — `np.diag`, `np.eye`, `np.abs`
+
+    > `np.diag(Sv)` · `np.eye(n)` · `np.abs(x)`
+
+    `U1 @ np.diag(Sv) @ V.T` replays the factorization literally: rotate by `Vᵀ`, stretch by `Σ`, rotate by `U1`.
+
+    The `checks` dict then measures four independent errors:
+
+    | key | what it proves |
+    |---|---|
+    | `max abs(A1 - U S Vt)` | the decomposition reconstructs the matrix |
+    | `max abs(UᵀU - I)` | `U` is orthogonal (`np.eye` builds the identity to compare against) |
+    | `max abs(VᵀV - I)` | `V` is orthogonal |
+    | `sigma vs. numpy` | the hand-built values match `np.linalg.svd(A1, compute_uv=False)` |
+
+    `np.abs(...).max()` is the infinity norm of the residual: the worst single entry, which is the strictest simple summary of how wrong the reconstruction is.
+
+    **In this notebook:** every value should land near `1e-16`. That is not "close enough" — it means the SVD is exact up to floating-point representation.
+    """)
+    return
+
+
 @app.cell
 def _(A1, Sv, U1, V, np):
     reconstructed = U1 @ np.diag(Sv) @ V.T
@@ -495,11 +796,33 @@ def _(A1, Sv, U1, V, np):
         "max |VᵀV − I|": float(np.abs(V.T @ V - np.eye(V.shape[1])).max()),
         "σ vs. numpy": float(np.abs(Sv - np.linalg.svd(A1, compute_uv=False)).max()),
     }
-    return (checks, reconstructed)
+    return checks, reconstructed
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Reading differences with `sns.heatmap`
+
+    > `sns.heatmap(data, annot=True, fmt=".2e", vmax=..., cmap="YlOrRd", square=True)`
+
+    The same routine as the earlier panel, configured for a different job — reading *differences* rather than values:
+
+    | setting | why |
+    |---|---|
+    | `cmap="rocket"` on `A1` and on the rebuild | identical scale, so the two panels are directly comparable |
+    | `cmap="YlOrRd"` on the residual | white means "nothing", orange means error |
+    | `fmt=".2e"` | residuals sit at `1e-16`; fixed-point `.2f` would print `0.00` in every cell |
+    | `vmax=1e-12` | caps the color scale so one round-off blip cannot wash out the rest |
+    | `square=True` | keeps the 2×2 tiles square instead of stretching them |
+
+    **In this notebook:** the third panel is the punchline — a grid of numbers at the `1e-16` scale, which reads as visual silence.
+    """)
+    return
 
 
 @app.cell
-def _(A1, reconstructed, np, plt, sns):
+def _(A1, np, plt, reconstructed, sns):
     residual = np.abs(A1 - reconstructed)
     _base = dict(
         annot=True,
@@ -548,7 +871,27 @@ def _(A1, reconstructed, np, plt, sns):
         color="#1f2937",
     )
     _fig
-    return (residual,)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `mo.ui.table`
+
+    > `mo.ui.table(data, selection="multi", pagination=True, show_column_summaries=True)`
+
+    Renders a list of dicts (or a DataFrame) as a **reactive, sortable HTML table** inside the notebook, not a static printout.
+
+    | argument | meaning |
+    |---|---|
+    | `selection` | `"multi"`, `"single"`, or `None`; `None` drops the checkboxes because nothing here consumes a selection |
+    | `show_column_summaries` | hides the min/mean/max footer — noise for four scalar checks |
+    | `show_data_types` | hides the dtype row, which would just say `float` four times |
+
+    **In this notebook:** the `checks` dict from the previous cell becomes four sortable rows, so the accuracy evidence is readable at a glance instead of buried in a printed dict.
+    """)
+    return
 
 
 @app.cell
