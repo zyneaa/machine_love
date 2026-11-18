@@ -481,6 +481,42 @@ def _(X_shuffled, t_shuffled):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
+    # Decision function
+
+    The model is a single affine map:
+
+    $$
+    f(x) = w^\top x + b
+    $$
+
+    - $w \in \mathbb{R}^{n}$ is the **normal vector** — it points perpendicular to the hyperplane $f(x) = 0$.
+    - $b$ is the **bias** — changing it slides the hyperplane along $w$ without rotating it.
+    - $f(x)$ is neither a probability nor a label: it is an unbounded real number.
+
+    **Reading the number.** For a point $x$:
+
+    $$
+    f(x) = 0 \;\Rightarrow\; \text{on the boundary}, \qquad
+    f(x) > 0 \;\Rightarrow\; \text{votes } +1, \qquad
+    f(x) < 0 \;\Rightarrow\; \text{votes } -1
+    $$
+
+    Dividing by the norm converts the score into a signed distance:
+
+    $$
+    \frac{f(x)}{\lVert w \rVert}
+    $$
+
+    so every point on the line $f(x) = c$ is exactly $c / \lVert w \rVert$ from the boundary, and the margin lines $f(x) = \pm 1$ sit at $\pm 1/\lVert w \rVert$.
+
+    **Why keep the raw score?** The hinge loss and its gradient are linear in $f$; thresholding here would throw away the distance information that training depends on. `predict` does the thresholding, later.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ### `decision_function` — the model itself
 
     > `decision_function(X, w, b)` → `X @ w + b` · `@app.function`
@@ -514,6 +550,38 @@ def decision_function(X, w, b):
     the signed distance from the hyperplane.
     """
     return X @ w + b
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # Predictions
+
+    Classification is a threshold applied to the score:
+
+    $$
+    \hat{y}(x) = \operatorname{sign}\bigl(f(x)\bigr) \in \{-1, +1\}
+    $$
+
+    with one convention to settle at the boundary itself: $f(x) = 0$ is assigned to $+1$ by testing $f(x) \ge 0$.
+
+    **Prediction is deliberately lossy.** The whole real line collapses into two values:
+
+    | score | label |
+    |---|---|
+    | $f(x) > 0$ | $+1$ |
+    | $f(x) = 0$ | $+1$ (the tie-break) |
+    | $f(x) < 0$ | $-1$ |
+
+    That is all evaluation needs: accuracy, a confusion matrix, a shaded decision region. What it cannot do is drive training — the derivative of a step function is zero almost everywhere, so no gradient survives the threshold. `predict` sits at the end of the pipeline, not inside the optimisation.
+
+    **Accuracy** is the mean agreement between prediction and truth:
+
+    $$
+    \mathrm{acc} = \frac{1}{N}\sum_{i=1}^{N} \mathbb{1}\bigl[\hat{y}(x_i) = t_i\bigr]
+    $$
+    """)
+    return
 
 
 @app.cell(hide_code=True)
@@ -607,41 +675,6 @@ def _(np):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### A worked hinge-loss table
-
-    > `np.array([...])` · `hinge_loss(t, scores)` · `np.mean(x)`
-
-    Four hand-picked score/label pairs, chosen to land in each region of the loss:
-
-    | score `f(x)` | label `t` | margin `t f(x)` | loss |
-    |---|---|---|---|
-    | `3` | `+1` | `3` | `0` |
-    | `0.5` | `+1` | `0.5` | `0.5` |
-    | `-2` | `-1` | `2` | `0` |
-    | `1` | `-1` | `-1` | `2` |
-
-    Two correct-and-comfortable points pay nothing; one correct-but-marginal point pays `0.5`; the misclassified point pays `2`. The mean, `0.625`, is the data term for this batch.
-
-    **In this notebook:** the numbers are hardcoded on purpose — no sampling, no randomness, so the arithmetic can be checked by hand and the same four points reappear as the red dots on the loss curve further down.
-    """)
-    return
-
-
-@app.cell
-def _(hinge_loss, np):
-    _decision_scores = np.array([3, 0.5, -2, 1])
-    _labels = np.array([1, 1, -1, -1])
-
-    _margins = _labels * _decision_scores
-    _losses = hinge_loss(_labels, _decision_scores)
-
-    _margins, _losses, np.mean(_losses)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
     # The regulariser
 
     $$
@@ -698,28 +731,28 @@ def regularizer(w):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### Reading the penalty: `w @ w` and scale
+    # The objective
 
-    > `np.array([3.0, 4.0])` · `regularizer(w)` · `regularizer(2.0 * w)`
+    Training minimises two terms at once:
 
-    `[3, 4]` has squared norm `25`, so `R = 12.5`; `[1, 1]` gives `R = 1`.
+    $$
+    J(w, b) = \underbrace{\frac{1}{N}\sum_{i=1}^{N}\max\bigl(0,\;1 - t_i f(x_i)\bigr)}_{\text{data term — mean hinge loss}} \;+\; \underbrace{\lambda\,\frac{1}{2}\lVert w \rVert^{2}}_{\text{model term — weight penalty}}
+    $$
 
-    Doubling a vector **quadruples** its penalty: `R(2w) = 4 R(w)`. That is the whole mechanism of regularisation — the cost grows with the *square* of the weights, so large weights are expensive and the optimiser prefers a small `||w||`, hence a wide margin.
+    - The **data term** charges nothing once every point satisfies $t_i f(x_i) \ge 1$; it grows linearly for points inside the margin or on the wrong side.
+    - The **model term** charges for large weights. Because the margin is $2/\lVert w \rVert$ wide, shrinking $\lVert w \rVert$ widens it — the penalty is "maximise the margin" written as a cost.
 
-    The printed pairs make the quadratic relationship visible without any plotting: `12.5 → 50` and `1.0 → 4.0`.
+    **The trade-off** is the whole job of $\lambda$:
 
-    **In this notebook:** this is also a sanity check on the implementation — if the ratio were not `4`, the `1/2` or the dot product would be wrong.
+    | $\lambda$ | behaviour |
+    |---|---|
+    | very small | the fit dominates; $\lVert w \rVert$ can grow until the margin nearly collapses |
+    | very large | the margin dominates; $\lVert w \rVert$ stays small and violations are tolerated |
+
+    **Why a mean rather than a sum?** Dividing by $N$ keeps the data term's scale independent of dataset size, so a given $\lambda$ means the same thing for 100 rows or 100 000. Textbooks usually write $C\sum_i L_i$; the two forms differ only by the constant $N$, with $C = 1/(N\lambda)$ describing the same family of problems.
+
+    The function is **convex** in $(w, b)$ — a sum of convex hinge terms plus a quadratic — so gradient descent reaches the global minimum, not merely a local one.
     """)
-    return
-
-
-@app.cell
-def _(np):
-    _example_w1 = np.array([3.0, 4.0])
-    _example_w2 = np.array([1.0, 1.0])
-
-    print(regularizer(_example_w1), regularizer(2.0 * _example_w1))
-    print(regularizer(_example_w2), regularizer(2.0 * _example_w2))
     return
 
 
@@ -764,31 +797,51 @@ def _(hinge_loss, np):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### Evaluating the objective at the origin
+    # Gradients
 
-    > `np.zeros(n_features)` · `objective(X, t, w, b, lamda_)`
+    The hinge is piecewise linear, so its derivative is a step:
 
-    `np.zeros(2)` gives `w = [0, 0]`, so every score equals the bias `0.1`, every margin is `±0.1`, and every sample sits inside the margin with loss `1 - 0.1 = 0.9`.
+    $$
+    \frac{\partial}{\partial f}\,\max\bigl(0,\,1 - t f\bigr) =
+    \begin{cases}
+    0 & t f > 1 \\[2pt]
+    -t & t f < 1
+    \end{cases}
+    $$
 
-    The objective therefore reads `0.9 + 0.8 * R(0) = 0.9`, since `R(0) = 0`. The same number would come out of averaging the constant loss column.
+    Applying the chain rule to the full objective gives
 
-    **In this notebook:** this is the baseline any training run must beat. A model that learns nothing scores exactly this; the reported number should fall below `0.9` once `w` picks up a direction.
+    $$
+    \frac{\partial J}{\partial w} = \lambda w - \frac{1}{N}\sum_{i \in V} t_i x_i,
+    \qquad
+    \frac{\partial J}{\partial b} = -\frac{1}{N}\sum_{i \in V} t_i
+    $$
+
+    where $V = \{\, i : t_i f(x_i) < 1 \,\}$ is the set of **margin violators**.
+
+    **What each piece does.**
+
+    | term | comes from | effect |
+    |---|---|---|
+    | $\lambda w$ | regulariser | pulls $w$ toward zero, widening the margin |
+    | $-\frac{1}{N}\sum_{i\in V} t_i x_i$ | data term | averages the violating points, each pulling toward its own class |
+    | $-\frac{1}{N}\sum_{i\in V} t_i$ | data term | a vote on the bias — an imbalance of violators shifts $b$ |
+
+    **Why only the violators survive.** A point with $t_i f(x_i) > 1$ has zero loss and zero derivative: nudging the boundary cannot lower the objective for it. That is the sparsity the name *support vector* refers to, and it is why both sums run over $V$ rather than over all $N$ samples.
+
+    **No $\lambda$ on the bias.** $b$ is deliberately outside the penalty: sliding the boundary should cost nothing, only rotating and stretching it should.
+
+    At the kink $t_i f(x_i) = 1$ the derivative is set-valued between the two branches; any value in that interval is a valid subgradient, and the implementation takes the $t f < 1$ branch.
+
+    **Sign convention.** These are *gradients of the objective to be minimised*, so training steps against them: $w \leftarrow w - \eta\,\partial J/\partial w$.
     """)
-    return
-
-
-@app.cell
-def _(X_shuffled, n_features, np, objective, t_shuffled):
-    _w = np.zeros(n_features)
-    _b = 0.1
-    objective(X_shuffled, t_shuffled, _w, _b, 0.8)
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # `Gradients` — subgradient of the objective
+    ### `gradients` — subgradient of the objective
 
     > `gradients(X, t, w, b, lambda_)` → `(dw, db)`
 
@@ -844,6 +897,36 @@ def _(np):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
+    # Training
+
+    Parameters move along the negative gradient, one step at a time:
+
+    $$
+    w \leftarrow w - \eta\,\frac{\partial J}{\partial w},
+    \qquad
+    b \leftarrow b - \eta\,\frac{\partial J}{\partial b}
+    $$
+
+    with the gradient from the previous section and a step length $\eta$ — the learning rate.
+
+    **Reading the update.** Each step moves the hyperplane in the direction that reduces the objective fastest: the violating points pull it toward themselves, the penalty pulls $w$ back toward the origin, and $\eta$ decides how far along that compromise to travel.
+
+    | $\eta$ | effect |
+    |---|---|
+    | too small | the objective barely moves; convergence needs many iterations |
+    | about right | monotone decay |
+    | too large | overshoot, oscillation, possible divergence |
+
+    **Scale matters more than the number.** On raw features spanning hundreds of units the gradient is enormous, so $\eta = 1.1$ leaps far past the optimum; on standardised features the gradient is O(1) and the same $\eta$ is sensible. That is exactly why this notebook standardises before training.
+
+    **Why one step gets its own function.** It makes the loop read as the mathematics: `train(...)` *is* the two lines above, and the training cell is just "repeat". It is also where the in-place subtlety lives — `w` is a numpy array, so `w -= ...` mutates the caller's array, while `b` is an immutable float whose new value must come back through the return value.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ### `train` — one gradient step
 
     > `train(X, t, w, b, learning_rate, lambda_)` → `(w, b)`
@@ -872,6 +955,12 @@ def _(mo):
 @app.cell
 def _(gradients):
     def train(X, t, w, b, learning_rate, lambda_):
+        """Apply one gradient-descent update and return the new parameters.
+
+        `w` is mutated in place (numpy array); `b` is an immutable float, so
+        its updated value must be taken from the return value rather than
+        relying on the caller's binding.
+        """
         dw, db = gradients(X, t, w, b, lambda_)
 
         w -= learning_rate * dw
@@ -927,63 +1016,6 @@ def _(X_shuffled):
 
     X_scaled = (X_shuffled - mean) / std
     return (X_scaled,)
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Small test between first and second pass
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ### One step from zero, on the raw features
-
-    > `gradients` · `decision_function` · `objective`
-
-    The training step taken apart and printed piece by piece.
-
-    | printout | meaning |
-    |---|---|
-    | `First gradient` | `(dw, db)` at `w = 0, b = 0`; every point violates, so `dw` is just the (negated) class-mean difference |
-    | `After first update` | `w ≈ [558, 0.9]`, `b = 0` |
-    | `Second gradient` | recomputed at the updated `w` |
-    | `After second update` | one more step from there |
-
-    **The blow-up is the lesson.** At `learning_rate = 1.1` on features measured in
-    hundreds, a single step yields `w₁ ≈ 558`, so scores run to `±10⁵` and the
-    "margins" printed afterwards are around `−1.1×10⁵ … 6.3×10⁵`. Nothing has
-    diverged — the hinge is flat once `t·f ≥ 1` — but those numbers are not
-    distances anyone can read. That is exactly what the standardised version below
-    fixes.
-    """)
-    return
-
-
-@app.cell
-def _(X_shuffled, b, gradients, lambda_, learning_rate, t_shuffled, w):
-    _w = w
-    _b = b
-
-    _dw, _db = gradients(X_shuffled, t_shuffled, _w, _b, lambda_)
-
-    print("First gradient:", _dw, _db)
-
-    _w -= learning_rate * _dw
-    _b -= learning_rate * _db
-
-    print("After first update:", _w, _b)
-
-    # Second gradient (before second update)
-    dw, db = gradients(X_shuffled, t_shuffled, _w, _b, lambda_)
-
-    print("Second gradient:", _dw, _db)
-
-    print("After second update:", _w, _b)
-    return
 
 
 @app.cell(hide_code=True)
@@ -1249,7 +1281,6 @@ def _(mo):
 
 @app.cell(hide_code=True, expand_output=True)
 def _(X_scaled, b1, history, np, plt, sns, t_shuffled, w1):
-
     _INK, _MARGIN = "#1f2937", "#0f766e"
     _COLORS = {1: "#2563eb", -1: "#dc2626"}
 
@@ -1294,11 +1325,14 @@ def _(X_scaled, b1, history, np, plt, sns, t_shuffled, w1):
 
     if _flat:
         _ax.text(
-            0.5, 0.5,
+            0.5,
+            0.5,
             "w = 0 — run the training cell first",
             transform=_ax.transAxes,
-            ha="center", va="center",
-            fontsize=11, color="#64748b",
+            ha="center",
+            va="center",
+            fontsize=11,
+            color="#64748b",
         )
     else:
 
@@ -1329,7 +1363,8 @@ def _(X_scaled, b1, history, np, plt, sns, t_shuffled, w1):
         ):
             _xs, _ys = _iso(_c)
             _ax.plot(
-                _xs, _ys,
+                _xs,
+                _ys,
                 color=_color,
                 lw=_lw,
                 ls=_style,
@@ -1347,7 +1382,8 @@ def _(X_scaled, b1, history, np, plt, sns, t_shuffled, w1):
     )
 
     _ax.text(
-        0.02, 0.02,
+        0.02,
+        0.02,
         f"misclassified {int((_margins <= 0).sum())}   ·   "
         f"inside margin {int(((_margins > 0) & (_margins < 1)).sum())}   ·   "
         f"outside {int((_margins >= 1).sum())}\n"
@@ -1370,7 +1406,6 @@ def _(X_scaled, b1, history, np, plt, sns, t_shuffled, w1):
     _ax.legend(loc="upper left", fontsize=8.5, frameon=True, framealpha=0.92)
     sns.despine(ax=_ax)
     _fig
-
     return
 
 
@@ -1824,53 +1859,6 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### The untrained model, inspected
-
-    > `decision_function` · `predict` · `hinge_loss` · `t * scores`
-
-    With `w = np.zeros(2)` and `b = 0.0`:
-
-    | quantity | value |
-    |---|---|
-    | scores | all `0.0` |
-    | predictions | all `+1` |
-    | per-sample loss | all `1.0`, mean `1.0` |
-    | violators | `1000` of `1000` |
-
-    `len(X_shuffled[_violations])` counts the mask, and it saturates: since every margin is `0 < 1`, every point is a support vector and every point contributes to the gradient. The gradient is then just the class imbalance, which is the first thing a training step fixes.
-
-    **Worth noting:** this cell reads `t` rather than `t_shuffled`. With a constant prediction the totals are unaffected, but once `w` is trained the labels must be the shuffled ones, or the losses no longer correspond to the rows.
-    """)
-    return
-
-
-@app.cell
-def _(X_shuffled, hinge_loss, n_features, np, predict, t):
-    _w = np.zeros(n_features)
-    _b = 0.0
-
-    _scores = decision_function(X_shuffled, _w, _b)
-    _predictions = predict(X_shuffled, _w, _b)
-    _losses = hinge_loss(t, _scores)
-    _margins = t * _scores
-    _violations = _margins < 1
-
-    (
-        _scores,
-        _predictions,
-        t,
-        _losses,
-        np.mean(_losses),
-        _violations,
-        len(X_shuffled),
-        len(X_shuffled[_violations]),
-    )
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
     ## What the loss looks like, and what the model does right now
 
     **Left:** the hinge as a function of the margin $m = t\,f(x)$. It is exactly
@@ -2099,6 +2087,224 @@ def _(mo):
         class S,Y,L,RV val;
         class O,FIT todo;
     """)
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ## Sanity checks with dummy data
+
+    Each check below is independent, deterministic, and uses a tiny local dataset. These checks validate the model functions; the training workflow above remains unchanged.
+    """)
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ### Test: decision scores and predictions
+
+    Check the affine score and the `f(x) = 0` tie-break using three hand-built points.
+    """)
+    return
+
+
+@app.cell
+def _(mo, np, predict):
+    _test_X = np.array([[2.0, 1.0], [-1.0, 3.0], [0.0, 0.5]])
+    _test_w = np.array([1.0, -1.0])
+    _test_b = 0.5
+    _test_scores = decision_function(_test_X, _test_w, _test_b)
+    _test_predictions = predict(_test_X, _test_w, _test_b)
+
+    assert np.allclose(_test_scores, [1.5, -3.5, 0.0])
+    assert np.array_equal(_test_predictions, [1, -1, 1])
+    mo.md(
+        "Decision scores and predictions pass, including the zero-score tie-break."
+    )
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ### Test: hinge loss
+
+    Four fixed score/label pairs cover zero loss, an inside-margin point, and a misclassified point. Expected losses: `[0, 0.5, 0, 2]`.
+    """)
+    return
+
+
+@app.cell
+def _(hinge_loss, mo, np):
+    _test_scores = np.array([3.0, 0.5, -2.0, 1.0])
+    _test_labels = np.array([1.0, 1.0, -1.0, -1.0])
+    _test_losses = hinge_loss(_test_labels, _test_scores)
+
+    assert np.allclose(_test_losses, [0.0, 0.5, 0.0, 2.0])
+    assert np.isclose(_test_losses.mean(), 0.625)
+    mo.md("Hinge-loss values and mean pass.")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ### Test: regularizer
+
+    Verify `R([3, 4]) = 12.5` and doubling weights quadruples the penalty.
+    """)
+    return
+
+
+@app.cell
+def _(mo, np):
+    _test_w = np.array([3.0, 4.0])
+    _test_penalty = regularizer(_test_w)
+
+    assert np.isclose(_test_penalty, 12.5)
+    assert np.isclose(regularizer(2.0 * _test_w), 4.0 * _test_penalty)
+    mo.md("Regularizer value and quadratic scaling pass.")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ### Test: objective
+
+    Use two opposite, correctly labelled points with fixed weights. Their margins are both `0.5`, so mean hinge loss is `0.5`; regularization adds `0.025`.
+    """)
+    return
+
+
+@app.cell
+def _(mo, np, objective):
+    _test_X = np.array([[1.0, 0.0], [-1.0, 0.0]])
+    _test_t = np.array([1.0, -1.0])
+    _test_w = np.array([0.5, 0.0])
+    _test_b = 0.0
+    _test_lambda = 0.2
+    _test_objective = objective(
+        _test_X, _test_t, _test_w, _test_b, _test_lambda
+    )
+
+    assert np.isclose(_test_objective, 0.525)
+    mo.md(f"✅ Objective matches expected value: `{_test_objective:.3f}`.")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ### Test: analytical gradients vs. finite differences
+
+    This fixed dataset keeps all margins away from the hinge kink, so centered finite differences can verify both gradients.
+    """)
+    return
+
+
+@app.cell
+def _(np, objective):
+    def numerical_gradient_w(X, t, w, b, lambda_, eps=1e-5):
+        grad = np.zeros_like(w)
+
+        for j in range(len(w)):
+            w_plus = w.copy()
+            w_minus = w.copy()
+
+            w_plus[j] += eps
+            w_minus[j] -= eps
+
+            loss_plus = objective(X, t, w_plus, b, lambda_)
+            loss_minus = objective(X, t, w_minus, b, lambda_)
+
+            grad[j] = (loss_plus - loss_minus) / (2 * eps)
+
+        return grad
+
+    return (numerical_gradient_w,)
+
+
+@app.cell
+def _(objective):
+    def numerical_gradient_b(X, t, w, b, lambda_, eps=1e-5):
+        loss_plus = objective(X, t, w, b + eps, lambda_)
+        loss_minus = objective(X, t, w, b - eps, lambda_)
+
+        return (loss_plus - loss_minus) / (2 * eps)
+
+    return (numerical_gradient_b,)
+
+
+@app.cell
+def _(gradients, mo, np, numerical_gradient_b, numerical_gradient_w):
+    # Compare the analytical gradient with centered finite differences.
+    _test_X = np.array([[1.0, 0.5], [-1.0, 0.25], [0.0, -1.0]])
+    _test_t = np.array([1.0, -1.0, 1.0])
+    _test_w = np.array([0.2, -0.3])
+    _test_b = 0.1
+    _test_lambda = 0.1
+
+    _test_analytical_dw, _test_analytical_db = gradients(
+        _test_X, _test_t, _test_w, _test_b, _test_lambda
+    )
+    _test_numerical_dw = numerical_gradient_w(
+        _test_X, _test_t, _test_w, _test_b, _test_lambda
+    )
+    _test_numerical_db = numerical_gradient_b(
+        _test_X, _test_t, _test_w, _test_b, _test_lambda
+    )
+
+    assert np.allclose(_test_analytical_dw, _test_numerical_dw, atol=1e-6)
+    assert np.isclose(_test_analytical_db, _test_numerical_db, atol=1e-6)
+    print("dw:", _test_analytical_dw, "≈", _test_numerical_dw)
+    print("db:", _test_analytical_db, "≈", _test_numerical_db)
+    mo.md("✅ Analytical and numerical gradients agree.")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ### Test: one training step
+
+    A tiny separable dataset checks that `train` updates the weights as expected and lowers the objective.
+    """)
+    return
+
+
+@app.cell
+def _(mo, np, objective, train):
+    _test_X = np.array([[1.0, 0.0], [-1.0, 0.0]])
+    _test_t = np.array([1.0, -1.0])
+    _test_w = np.zeros(2)
+    _test_b = 0.0
+    _test_lambda = 0.1
+    _test_initial_objective = objective(
+        _test_X, _test_t, _test_w, _test_b, _test_lambda
+    )
+
+    _test_w, _test_b = train(
+        _test_X,
+        _test_t,
+        _test_w,
+        _test_b,
+        learning_rate=0.1,
+        lambda_=_test_lambda,
+    )
+    _test_updated_objective = objective(
+        _test_X, _test_t, _test_w, _test_b, _test_lambda
+    )
+
+    assert np.allclose(_test_w, [0.1, 0.0])
+    assert np.isclose(_test_b, 0.0)
+    assert _test_updated_objective < _test_initial_objective
+    mo.md(
+        f"✅ One step gives `w={_test_w.tolist()}`, `b={_test_b:.1f}` and "
+        f"reduces objective `{_test_initial_objective:.3f} → {_test_updated_objective:.4f}`."
+    )
     return
 
 
