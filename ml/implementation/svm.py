@@ -2090,7 +2090,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
     ## Sanity checks with dummy data
@@ -2100,7 +2100,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
     ### Test: decision scores and predictions
@@ -2191,7 +2191,7 @@ def _(mo, np, objective):
     )
 
     assert np.isclose(_test_objective, 0.525)
-    mo.md(f"✅ Objective matches expected value: `{_test_objective:.3f}`.")
+    mo.md(f"Objective matches expected value: `{_test_objective:.3f}`.")
     return
 
 
@@ -2261,7 +2261,7 @@ def _(gradients, mo, np, numerical_gradient_b, numerical_gradient_w):
     assert np.isclose(_test_analytical_db, _test_numerical_db, atol=1e-6)
     print("dw:", _test_analytical_dw, "≈", _test_numerical_dw)
     print("db:", _test_analytical_db, "≈", _test_numerical_db)
-    mo.md("✅ Analytical and numerical gradients agree.")
+    mo.md("Analytical and numerical gradients agree.")
     return
 
 
@@ -2302,7 +2302,7 @@ def _(mo, np, objective, train):
     assert np.isclose(_test_b, 0.0)
     assert _test_updated_objective < _test_initial_objective
     mo.md(
-        f"✅ One step gives `w={_test_w.tolist()}`, `b={_test_b:.1f}` and "
+        f"One step gives `w={_test_w.tolist()}`, `b={_test_b:.1f}` and "
         f"reduces objective `{_test_initial_objective:.3f} → {_test_updated_objective:.4f}`."
     )
     return
